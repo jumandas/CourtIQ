@@ -6,6 +6,20 @@ Team: Juman Das · Tanmay Pawar · Hiten Kataria
 
 ---
 
+## Live Demo
+
+| Resource | URL |
+|---|---|
+| Public Dashboard | https://court-iq-xi.vercel.app/ |
+| REST API | https://courtiq-backend-ck8v.onrender.com |
+| Health check | https://courtiq-backend-ck8v.onrender.com/health |
+| Sample analytics | https://courtiq-backend-ck8v.onrender.com/api/analytics/summary |
+
+> The backend runs on Render's free tier and sleeps after ~15 min of inactivity.
+> First request after a cold start takes 20–30 seconds; refresh once if the dashboard appears empty.
+
+---
+
 ## Project Overview
 
 CourtIQ Analytics answers three core NBA analytics questions through an interactive dashboard backed by a normalized PostgreSQL database:
