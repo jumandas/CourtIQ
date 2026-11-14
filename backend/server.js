@@ -46,15 +46,22 @@ app.use("/api/teams",     teamsRouter);
 app.use("/api/stats",     statsRouter);
 app.use("/api/analytics", analyticsRouter);
 
-// Health check endpoint — useful for Render.com deployment monitoring
+// Health check endpoint — liveness probe for Render.com deployment monitoring.
+// It answers 200 whenever the process is up, so a database outage does not
+// make Render restart the service in a loop. The database state is reported
+// honestly in the body; data endpoints still fail fast with 500 when the DB
+// is down. A one-time database probe runs at startup and logs the result.
 // Author: Tanmay Pawar
 app.get("/health", async (req, res) => {
-  try {
-    await pool.query("SELECT 1");
-    res.json({ status: "ok", database: "connected" });
-  } catch {
-    res.status(503).json({ status: "error", database: "unreachable" });
-  }
+  const dbCheck = pool.query("SELECT 1").then(
+    () => "connected",
+    () => "unreachable"
+  );
+  const timeout = new Promise((resolve) =>
+    setTimeout(() => resolve("unreachable"), 2000)
+  );
+  const database = await Promise.race([dbCheck, timeout]);
+  res.json({ status: "ok", database });
 });
 
 // 404 fallback
@@ -74,4 +81,9 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`CourtIQ API running on http://localhost:${PORT}`);
   console.log(`Health: http://localhost:${PORT}/health`);
+  // One-time database probe so the Render logs show the real DB state at boot.
+  pool.query("SELECT 1").then(
+    () => console.log("Database: connected"),
+    (err) => console.error("Database: unreachable -", err.message)
+  );
 });
