@@ -17,6 +17,8 @@ require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
 
 const express   = require("express");
 const cors      = require("cors");
+const fs        = require("fs");
+const path      = require("path");
 const pool      = require("./config/db");
 
 const playersRouter   = require("./routes/players");
@@ -86,4 +88,40 @@ app.listen(PORT, () => {
     () => console.log("Database: connected"),
     (err) => console.error("Database: unreachable -", err.message)
   );
+  // First-run setup: if this database has no CourtIQ tables yet (a fresh
+  // free database shared with another demo, for example), create them and
+  // load the seed data. Later boots see the tables and skip it, so this
+  // never touches an already-seeded database.
+  ensureSeeded().catch((err) =>
+    console.error("Database seeding failed -", err.message)
+  );
 });
+
+// Create the CourtIQ tables and load the seed data when they are missing.
+// The SQL lives in scripts/ next to this file because Render deploys only
+// the backend/ directory, so the repo-root database/ copies are not present
+// inside the running service.
+async function ensureSeeded() {
+  const exists = await pool.query(
+    "SELECT count(*) AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'teams'"
+  );
+  if (Number(exists.rows[0].n) > 0) {
+    const rows = await pool.query("SELECT count(*) AS n FROM teams");
+    if (Number(rows.rows[0].n) > 0) {
+      console.log(`Database: CourtIQ tables present (${rows.rows[0].n} teams).`);
+      return;
+    }
+    console.log("Database: tables exist but are empty, loading seed data...");
+    const seedSql = fs.readFileSync(path.join(__dirname, "scripts", "seed.sql"), "utf8");
+    await pool.query(seedSql);
+  } else {
+    console.log("Database: no CourtIQ tables found, creating and seeding...");
+    const schemaSql = fs.readFileSync(path.join(__dirname, "scripts", "schema.sql"), "utf8");
+    await pool.query(schemaSql);
+    const seedSql = fs.readFileSync(path.join(__dirname, "scripts", "seed.sql"), "utf8");
+    await pool.query(seedSql);
+  }
+  const teams = await pool.query("SELECT count(*) AS n FROM teams");
+  const players = await pool.query("SELECT count(*) AS n FROM players");
+  console.log(`Database: seeded (${teams.rows[0].n} teams, ${players.rows[0].n} players).`);
+}
